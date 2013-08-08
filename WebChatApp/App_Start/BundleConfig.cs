@@ -24,7 +24,7 @@ namespace WebChatApp.App_Start
                  "~/Scripts/bootstrap.js"));
 
             //Styles
-            bundles.Add(new ScriptBundle("~/styles/bootstrap").Include(
+            bundles.Add(new StyleBundle("~/styles/bootstrap").Include(
                  "~/Content/bootstrap.css"));
         }
     }
