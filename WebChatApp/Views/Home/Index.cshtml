@@ -17,7 +17,7 @@
     </div>
     <div class="col-lg-2">
       <ul class="nav nav-pills nav-stacked">
-        <li ng-class="{'active':isCurrentUser(user.ID)}" ng-repeat="user in users | orderBy:'UserName'"><a href="#">{{ user.UserName }}</a></li>
+        <li ng-class="{'active':isCurrentUser(user.id)}" ng-repeat="user in users | orderBy:'UserName'" ng-cloak><a href="#"><span class="badge pull-right" ng-show="user.isTyping">...</span>{{ user.name }}</a></li>
       </ul>
     </div>
   </div>
@@ -25,7 +25,7 @@
   <div class="row">
   <form name="chatMessageForm">
     <div class="col-lg-10">
-      <input type="text" id="chatMessage" class="form-control input-lg" placeholder="Enter message..." ng-model="chatMessage" required />
+      <input type="text" id="chatMessage" class="form-control input-lg" placeholder="Enter message..." ng-model="chatMessage" ng-change="chatMessageChanged()" required />
     </div>
     <div class="col-lg-2">
       <input type="submit" class="btn btn-success btn-lg btn-block" type="button" ng-disabled="chatMessageForm.$invalid" ng-click="postChatMessage()" value="Post" />
@@ -47,6 +47,11 @@
               <input type="text" class="form-control" id="inputEmail" autofocus="autofocus" ng-model="userName" required />
             </div>
           </div>
+          <div class="checkbox pull-right">
+            <label>
+              <input type="checkbox" checked="checked"> Remember me
+            </label>
+          </div>
         </div>
         <div class="modal-footer">
           <input type="submit" class="btn btn-primary" data-dismiss="modal" ng-disabled="loginForm.$invalid" ng-click="login(userName)" value="Enter" />
@@ -67,24 +72,24 @@
     });
   });
 
-  angular.module('chatApp.services', []).
-    factory('communicationService', function ($rootScope) {
-      var communicationService = {};
-      communicationService.userName = null;
+  angular.module('chatApp.services', [])
+  .factory('communicationService', function ($rootScope) {
+    var communicationService = {};
+    communicationService.userName = null;
 
-      communicationService.userLoggedIn = function (userName) {
-        this.userName = userName;
-        this.broadcast();
-      };
+    communicationService.userLoggedIn = function (userName) {
+      this.userName = userName;
+      this.broadcast();
+    };
 
-      communicationService.broadcast = function () {
-        $rootScope.$broadcast('userLoggedIn');
-      };
+    communicationService.broadcast = function () {
+      $rootScope.$broadcast('userLoggedIn');
+    };
 
-      return communicationService;
-    });
+    return communicationService;
+  });
 
-    angular.module('chatApp.controllers', [])
+  angular.module('chatApp.controllers', [])
   .controller('loginController', function ($scope, communicationService) {
     $scope.login = function (userName) {
       communicationService.userLoggedIn(userName);
@@ -97,7 +102,21 @@
     $scope.users = [];
 
     $scope.isCurrentUser = function (userID) {
-      return userID == $scope.currentUser.ID;
+      return userID == $scope.currentUser.id;
+    };
+
+    $scope.chatMessageChanged = function () {
+      var hasCurrentUserIsTypingFlag = $scope.currentUser.isTyping;
+      var isChatMessageEmpty = $scope.chatMessage === undefined;
+
+      if (hasCurrentUserIsTypingFlag && isChatMessageEmpty) {
+        chat.server.isUserTypingChanged(false);
+        $scope.currentUser.isTyping = false;
+      }
+      else if (!hasCurrentUserIsTypingFlag && !isChatMessageEmpty) {
+        chat.server.isUserTypingChanged(true);
+        $scope.currentUser.isTyping = true;
+      }
     };
 
     $scope.postChatMessage = function () {
@@ -128,9 +147,9 @@
 
       chat.client.onUserDisconnected = function (userID) {
         $scope.$apply(function () {
-          angular.forEach($scope.users, function (user) {
-            if (user.ID == userID) {
-              var index = $scope.users.indexOf(user);
+          angular.forEach($scope.users, function (item) {
+            if (item.id == userID) {
+              var index = $scope.users.indexOf(item);
               $scope.users.splice(index, 1);
               return true;
             }
@@ -139,7 +158,18 @@
       };
 
       chat.client.onNewChatMessage = function (user, chatMessage) {
-        $('#chat-message-container').append(user.UserName + ': ' + chatMessage + '\n');
+        $('#chat-message-container').append(user.name + ': ' + chatMessage + '\n');
+      };
+
+      chat.client.onIsUserTypingChanged = function (user) {
+        $scope.$apply(function () {
+          angular.forEach($scope.users, function (item) {
+            if (item.id == user.id) {
+              item.isTyping = user.isTyping;
+              return true;
+            }
+          });
+        });
       };
     });
   });

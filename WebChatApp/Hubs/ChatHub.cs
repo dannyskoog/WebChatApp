@@ -29,11 +29,6 @@ namespace WebChatApp.Hubs
             }
         }
 
-        public void PostChatMessage(HubUser user, string chatMessage)
-        {
-            Clients.All.onNewChatMessage(user, chatMessage);
-        }
-
         public override System.Threading.Tasks.Task OnDisconnected()
         {
             string userID = Context.ConnectionId;
@@ -48,6 +43,28 @@ namespace WebChatApp.Hubs
             }
 
             return base.OnDisconnected();
+        }
+
+
+        public void PostChatMessage(HubUser user, string chatMessage)
+        {
+            Clients.All.onNewChatMessage(user, chatMessage);
+
+            user.IsTyping = false;
+            Clients.Others.onIsUserTypingChanged(user);
+        }
+
+        public void IsUserTypingChanged(bool isUserTyping)
+        {
+            string userID = Context.ConnectionId;
+
+            HubUser user = null;
+
+            if ((user = users.FirstOrDefault(u => u.ID.Equals(Context.ConnectionId))) != null)
+            {
+                user.IsTyping = isUserTyping;
+                Clients.Others.onIsUserTypingChanged(user);
+            }
         }
     }
 }
