@@ -1,0 +1,149 @@
+﻿@{
+    ViewBag.Title = "Index";
+}
+
+<div class="well" ng-controller="chatController">
+  <div class="row">
+    <div class="col-lg-10">
+      <h1>Chat</h1>
+     </div>
+     <div class="col-lg-2">
+      <h1>Users</h1>
+      </div>
+    </div>
+  <div class="row">
+    <div class="col-lg-10">
+      <textarea id="chat-message-container" class="form-control" rows="20"></textarea>
+    </div>
+    <div class="col-lg-2">
+      <ul class="nav nav-pills nav-stacked">
+        <li ng-class="{'active':isCurrentUser(user.ID)}" ng-repeat="user in users | orderBy:'UserName'"><a href="#">{{ user.UserName }}</a></li>
+      </ul>
+    </div>
+  </div>
+  <br />
+  <div class="row">
+  <form name="chatMessageForm">
+    <div class="col-lg-10">
+      <input type="text" id="chatMessage" class="form-control input-lg" placeholder="Enter message..." ng-model="chatMessage" required />
+    </div>
+    <div class="col-lg-2">
+      <input type="submit" class="btn btn-success btn-lg btn-block" type="button" ng-disabled="chatMessageForm.$invalid" ng-click="postChatMessage()" value="Post" />
+    </div>
+    </form>
+  </div>
+</div>
+<div class="modal fade" id="myModal" ng-controller="loginController">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h4 class="modal-title">Pick a username to enter the chat</h4>
+      </div> 
+      <form class="form-horizontal" name="loginForm">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="inputEmail" class="col-lg-2 control-label">Username</label>
+            <div class="col-lg-10">
+              <input type="text" class="form-control" id="inputEmail" autofocus="autofocus" ng-model="userName" required />
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <input type="submit" class="btn btn-primary" data-dismiss="modal" ng-disabled="loginForm.$invalid" ng-click="login(userName)" value="Enter" />
+        </div> 
+      </form>
+    </div>
+  </div>
+</div>
+
+@section scripts {
+<script src="~/signalr/hubs" type="text/javascript"></script>
+<script type="text/javascript">
+  $(document).ready(function () {
+    $('#myModal').modal({
+      keyboard: false,
+      show: true,
+      backdrop:'static'
+    });
+  });
+
+  angular.module('chatApp.services', []).
+    factory('communicationService', function ($rootScope) {
+      var communicationService = {};
+      communicationService.userName = null;
+
+      communicationService.userLoggedIn = function (userName) {
+        this.userName = userName;
+        this.broadcast();
+      };
+
+      communicationService.broadcast = function () {
+        $rootScope.$broadcast('userLoggedIn');
+      };
+
+      return communicationService;
+    });
+
+    angular.module('chatApp.controllers', [])
+  .controller('loginController', function ($scope, communicationService) {
+    $scope.login = function (userName) {
+      communicationService.userLoggedIn(userName);
+    };
+  })
+  .controller('chatController', function ($scope, communicationService) {
+    var chat = $.connection.chatHub;
+    $scope.chatMessage = null;
+    $scope.currentUser = null;
+    $scope.users = [];
+
+    $scope.isCurrentUser = function (userID) {
+      return userID == $scope.currentUser.ID;
+    };
+
+    $scope.postChatMessage = function () {
+      chat.server.postChatMessage($scope.currentUser, $scope.chatMessage);
+      $scope.chatMessage = null;
+    };
+
+    $scope.$on('userLoggedIn', function () {
+      var userName = communicationService.userName;
+
+      $.connection.hub.start().done(function () {
+        chat.server.initializeConnection(userName);
+        angular.element('#chatMessage').focus();
+      });
+
+      chat.client.onConnectionInitialized = function (users, user) {
+        $scope.$apply(function () {
+          $scope.currentUser = user;
+          $scope.users = users;
+        });
+      };
+
+      chat.client.onUserConnected = function (user) {
+        $scope.$apply(function () {
+          $scope.users.push(user);
+        });
+      };
+
+      chat.client.onUserDisconnected = function (userID) {
+        $scope.$apply(function () {
+          angular.forEach($scope.users, function (user) {
+            if (user.ID == userID) {
+              var index = $scope.users.indexOf(user);
+              $scope.users.splice(index, 1);
+              return true;
+            }
+          });
+        });
+      };
+
+      chat.client.onNewChatMessage = function (user, chatMessage) {
+        $('#chat-message-container').append(user.UserName + ': ' + chatMessage + '\n');
+      };
+    });
+  });
+
+  angular.module('chatApp', ['chatApp.services', 'chatApp.controllers']);
+</script>
+}
